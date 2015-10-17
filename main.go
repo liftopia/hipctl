@@ -14,7 +14,6 @@ import (
 
 var conn redis.Conn
 var frontends map[string]frontend
-var backends map[string]backend
 
 func validateips(c *cli.Context) error {
 	if len(c.Args()) == 0 {

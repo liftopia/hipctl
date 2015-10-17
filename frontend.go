@@ -3,8 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"net"
-	"net/url"
 	"sort"
 	"strings"
 
@@ -17,13 +15,6 @@ type frontend struct {
 	hostheader string
 	port       string
 	hosts      map[string]bool
-	Backends   map[string]backend
-}
-
-type backend struct {
-	IP        net.IP
-	Endpoint  url.URL
-	Frontends map[string]bool
 }
 
 func (f *frontend) hostips() []string {
@@ -39,13 +30,12 @@ func (f *frontend) hostips() []string {
 
 func (f *frontend) String() string {
 	return fmt.Sprintf(
-		"%-40s%-40s%-40s\nport %2s - %s\n%+v",
+		"%-40s%-40s%-40s\nport %2s - %s",
 		f.name,
 		f.id,
 		f.hostheader,
 		f.port,
 		strings.Join(f.hostips(), ","),
-		f.Backends,
 	)
 }
 
@@ -100,30 +90,12 @@ func getfrontend(key string) (fe frontend, err error) {
 		hostheader: hostheader,
 		port:       port,
 		hosts:      make(map[string]bool, len(hosts)),
-		Backends:   make(map[string]backend, len(hosts)),
 	}
 
-	for h, uri := range hosts {
-		endpoint, err := url.Parse(uri)
-		if err != nil {
-			fmt.Printf("weird error...")
-			fmt.Println(err)
-			continue
-		}
-
+	for h := range hosts {
 		host := hosts[h][7 : len(hosts[h])-3]
-		be := backend{
-			Endpoint:  *endpoint,
-			IP:        net.ParseIP(host),
-			Frontends: make(map[string]bool),
-		}
 		fe.hosts[host] = true
-		fe.Backends[host] = be
 	}
-
-	// for _, be := range fe.Backends {
-	// 	be.Frontends[key] = fe
-	// }
 
 	return fe, nil
 }
