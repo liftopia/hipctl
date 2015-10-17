@@ -72,6 +72,9 @@ func main() {
 			Action: func(c *cli.Context) {
 				for _, fe := range frontends {
 					fmt.Printf("%v\n", &fe)
+					for _, be := range fe.Backends {
+						fmt.Printf("%v\n", be)
+					}
 					fmt.Println(strings.Repeat("-", 120))
 				}
 			},

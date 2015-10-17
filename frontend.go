@@ -3,24 +3,35 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"sort"
 	"strings"
 
 	"github.com/garyburd/redigo/redis"
 )
 
+type hostmap map[string]bool
+
 type frontend struct {
 	name       string
 	id         string
 	hostheader string
 	port       string
-	hosts      map[string]bool
+	hosts      hostmap
+	Backends   []*backend
 }
 
-func (f *frontend) hostips() []string {
-	keys := make([]string, 0, len(f.hosts))
+type backend struct {
+	IP        net.IP
+	Endpoint  *url.URL
+	Frontends hostmap
+}
 
-	for k := range f.hosts {
+func (a hostmap) keys() []string {
+	keys := make([]string, 0, len(a))
+
+	for k := range a {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
@@ -30,12 +41,18 @@ func (f *frontend) hostips() []string {
 
 func (f *frontend) String() string {
 	return fmt.Sprintf(
-		"%-40s%-40s%-40s\nport %2s - %s",
+		"%-40s %-39s %-39s",
 		f.name,
 		f.id,
 		f.hostheader,
-		f.port,
-		strings.Join(f.hostips(), ","),
+	)
+}
+
+func (b *backend) String() string {
+	return fmt.Sprintf(
+		"%-40s %s",
+		b.IP,
+		b.Endpoint,
 	)
 }
 
@@ -90,11 +107,28 @@ func getfrontend(key string) (fe frontend, err error) {
 		hostheader: hostheader,
 		port:       port,
 		hosts:      make(map[string]bool, len(hosts)),
+		Backends:   make([]*backend, 0, len(hosts)),
 	}
 
-	for h := range hosts {
+	for h, uri := range hosts {
+		endpoint, err := url.Parse(uri)
+		if err != nil {
+			fmt.Printf("URI wouldn't parse: uri: %s", uri)
+			fmt.Println(err)
+			continue
+		}
 		host := hosts[h][7 : len(hosts[h])-3]
+		be := backend{
+			Endpoint:  endpoint,
+			IP:        net.ParseIP(host),
+			Frontends: make(map[string]bool),
+		}
 		fe.hosts[host] = true
+		fe.Backends = append(fe.Backends, &be)
+	}
+
+	for _, be := range fe.Backends {
+		be.Frontends[fe.name] = true
 	}
 
 	return fe, nil
