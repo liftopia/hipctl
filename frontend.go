@@ -4,39 +4,17 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"net/url"
-	"sort"
 	"strings"
 
 	"github.com/garyburd/redigo/redis"
 )
-
-type hostmap map[string]bool
 
 type frontend struct {
 	name       string
 	id         string
 	hostheader string
 	port       string
-	hosts      hostmap
-	Backends   []*backend
-}
-
-type backend struct {
-	IP        net.IP
-	Endpoint  *url.URL
-	Frontends hostmap
-}
-
-func (a hostmap) keys() []string {
-	keys := make([]string, 0, len(a))
-
-	for k := range a {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	return keys
+	Backends   []*Backend
 }
 
 func (f *frontend) String() string {
@@ -48,30 +26,36 @@ func (f *frontend) String() string {
 	)
 }
 
-func (b *backend) String() string {
-	return fmt.Sprintf(
-		"%-40s %s",
-		b.IP,
-		b.Endpoint,
-	)
+func (f *frontend) hasbackend(ip string) bool {
+	for _, be := range f.Backends {
+		if be.IP.String() == net.ParseIP(ip).String() {
+			return true
+		}
+	}
+	return false
 }
 
-func (f *frontend) hasbackend(ip string) bool {
-	return f.hosts[ip]
+func (f *frontend) getbackend(ip string) Backend {
+	for _, be := range f.Backends {
+		if be.IP.String() == net.ParseIP(ip).String() {
+			return *be
+		}
+	}
+	return Backend{}
 }
 
 func (f *frontend) addbackend(ip string) {
 	fe := *f
-	url := fmt.Sprintf("http://%s:%s", ip, f.port)
-	conn.Do("RPUSH", f.name, url)
+	be := NewBackend(ip, fe.port, &fe)
+	conn.Do("RPUSH", f.name, be.Endpoint)
 	fe, _ = getfrontend(f.name)
 	*f = fe
 }
 
 func (f *frontend) removebackend(ip string) {
 	fe := *f
-	url := fmt.Sprintf("http://%s:%s", ip, f.port)
-	conn.Do("LREM", f.name, 0, url)
+	be := fe.getbackend(ip)
+	conn.Do("LREM", f.name, 0, be.Endpoint)
 	fe, _ = getfrontend(f.name)
 	*f = fe
 }
@@ -106,45 +90,33 @@ func getfrontend(key string) (fe frontend, err error) {
 		id:         id,
 		hostheader: hostheader,
 		port:       port,
-		hosts:      make(map[string]bool, len(hosts)),
-		Backends:   make([]*backend, 0, len(hosts)),
+		Backends:   make([]*Backend, 0, len(hosts)),
 	}
 
-	for h, uri := range hosts {
-		endpoint, err := url.Parse(uri)
-		if err != nil {
-			fmt.Printf("URI wouldn't parse: uri: %s", uri)
-			fmt.Println(err)
-			continue
-		}
+	for h := range hosts {
 		host := hosts[h][7 : len(hosts[h])-3]
-		be := backend{
-			Endpoint:  endpoint,
-			IP:        net.ParseIP(host),
-			Frontends: make(map[string]bool),
-		}
-		fe.hosts[host] = true
+		be := NewBackend(host, fe.port, &fe)
 		fe.Backends = append(fe.Backends, &be)
-	}
-
-	for _, be := range fe.Backends {
-		be.Frontends[fe.name] = true
 	}
 
 	return fe, nil
 }
 
-func getfrontends() (frontends map[string]frontend, err error) {
-	values, err := redis.Values(conn.Do("KEYS", "frontend:*"))
-	if err != nil || len(values) == 0 {
-		return nil, err
+func getfrontendkeys() (keys []string) {
+	values, _ := redis.Values(conn.Do("KEYS", "frontend:*"))
+	if len(values) == 0 {
+		return nil
 	}
 
-	var keys []string
 	if err := redis.ScanSlice(values, &keys); err != nil {
-		return nil, err
+		return nil
 	}
 
+	return
+}
+
+func getfrontends() (frontends map[string]frontend, err error) {
+	keys := getfrontendkeys()
 	frontends = make(map[string]frontend)
 	for _, key := range keys {
 		if strings.Contains(key, "fr-ca") || strings.Contains(key, "blog") {
