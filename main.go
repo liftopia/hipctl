@@ -41,10 +41,7 @@ func setupglobals(c *cli.Context) (err error) {
 		return
 	}
 
-	frontends, err = getfrontends()
-	if err != nil {
-		return
-	}
+	updatefrontends()
 	if len(frontends) == 0 {
 		return errors.New("empty frontends list :(")
 	}

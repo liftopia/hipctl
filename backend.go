@@ -32,3 +32,7 @@ func NewBackend(ip string, port string, fe *frontend) Backend {
 		IP:       net.ParseIP(ip),
 	}
 }
+
+func (b *Backend) leavefrontend() {
+	conn.Do("LREM", b.Frontend.name, 0, b.Endpoint)
+}

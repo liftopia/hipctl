@@ -14,7 +14,7 @@ type frontend struct {
 	id         string
 	hostheader string
 	port       string
-	Backends   []*Backend
+	Backends   map[string]*Backend
 }
 
 func (f *frontend) String() string {
@@ -55,7 +55,7 @@ func (f *frontend) addbackend(ip string) {
 func (f *frontend) removebackend(ip string) {
 	fe := *f
 	be := fe.getbackend(ip)
-	conn.Do("LREM", f.name, 0, be.Endpoint)
+	be.leavefrontend()
 	fe, _ = getfrontend(f.name)
 	*f = fe
 }
@@ -90,13 +90,13 @@ func getfrontend(key string) (fe frontend, err error) {
 		id:         id,
 		hostheader: hostheader,
 		port:       port,
-		Backends:   make([]*Backend, 0, len(hosts)),
+		Backends:   make(map[string]*Backend),
 	}
 
 	for h := range hosts {
 		host := hosts[h][7 : len(hosts[h])-3]
 		be := NewBackend(host, fe.port, &fe)
-		fe.Backends = append(fe.Backends, &be)
+		fe.Backends[host] = &be
 	}
 
 	return fe, nil
@@ -115,10 +115,9 @@ func getfrontendkeys() (keys []string) {
 	return
 }
 
-func getfrontends() (frontends map[string]frontend, err error) {
-	keys := getfrontendkeys()
+func updatefrontends() (err error) {
 	frontends = make(map[string]frontend)
-	for _, key := range keys {
+	for _, key := range getfrontendkeys() {
 		if strings.Contains(key, "fr-ca") || strings.Contains(key, "blog") {
 			continue
 		}
@@ -130,5 +129,5 @@ func getfrontends() (frontends map[string]frontend, err error) {
 		frontends[key] = fe
 	}
 
-	return frontends, nil
+	return nil
 }
