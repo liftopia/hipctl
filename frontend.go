@@ -19,6 +19,12 @@ type Frontend struct {
 	Backends map[url.URL]*Backend
 }
 
+var frontends map[string]Frontend
+
+func init() {
+	frontends = make(map[string]Frontend)
+}
+
 func (f *Frontend) String() string {
 	return fmt.Sprintf(
 		"%-40s %-6d %+v",
@@ -193,7 +199,6 @@ func getfrontendkeys() (keys []string, err error) {
 }
 
 func updatefrontends() (err error) {
-	frontends = make(map[string]Frontend)
 	var keys []string
 	if keys, err = getfrontendkeys(); err != nil {
 		return

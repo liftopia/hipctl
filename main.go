@@ -14,7 +14,6 @@ import (
 )
 
 var conn redis.Conn
-var frontends map[string]Frontend
 
 var log = logging.MustGetLogger("hipctl")
 var format = logging.MustStringFormatter(
@@ -121,6 +120,6 @@ func main() {
 
 	err := app.Run(os.Args)
 	if err != nil {
-		log.Error("Error - %+v", err)
+		log.Error("%+v", err)
 	}
 }
