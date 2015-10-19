@@ -41,7 +41,6 @@ func validateips(c *cli.Context) (err error) {
 
 // yeah i know
 func setupglobals(c *cli.Context) (err error) {
-	log.Debug(strings.Join(c.Args(), ", "))
 	conn, err = redisurl.ConnectToURL(c.GlobalString("redis"))
 	if err != nil {
 		return
@@ -90,13 +89,10 @@ func main() {
 			},
 			Subcommands: []cli.Command{
 				{
-					Name:  "servers",
-					Usage: "list configured servers",
-					Action: func(c *cli.Context) {
-						for _, server := range servers {
-							fmt.Printf("%+v\n", server)
-						}
-					},
+					Name:         "servers",
+					Usage:        "list configured servers",
+					BashComplete: ListServersComplete,
+					Action:       ListServers,
 				},
 			},
 		},

@@ -64,9 +64,12 @@ func (b *Backend) IsIP(ip string) bool {
 }
 
 // NewBackend generates a backend for frontend usage
-func NewBackend(endpoint url.URL, fe *Frontend) Backend {
-	return Backend{
-		Endpoint: &endpoint,
+func NewBackend(endpoint *url.URL, fe *Frontend) (be *Backend) {
+	server := NewServer(ipfromurl(endpoint))
+	be = &Backend{
+		Endpoint: endpoint,
 		Frontend: fe,
 	}
+	server.AddBackend(be)
+	return
 }

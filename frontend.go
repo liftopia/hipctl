@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -56,11 +57,12 @@ func (f *Frontend) appendBackend(b *Backend) {
 	f.Backends[*b.Endpoint] = b
 }
 
-func (f *Frontend) addbackend(ip string) (err error) {
+func (f *Frontend) addbackend(arg string) (err error) {
+	ip := net.ParseIP(arg)
 	be := NewBackend(urlfromipandport(ip, f.port), f)
-	be.Server = GetServer(ip)
+	be.Server = NewServer(ip)
 	log.Debug("Adding new backend %v to %s", be.Endpoint, f.key)
-	f.appendBackend(&be)
+	f.appendBackend(be)
 	log.Debug("%s backends: %+v", f.key, f.Backends)
 	err = f.Save()
 
@@ -171,13 +173,14 @@ func getfrontend(key string) (fe Frontend, err error) {
 
 	for h := range hosts {
 		host := hosts[h][7 : len(hosts[h])-3]
+		ip := net.ParseIP(host)
 		var be Backend
-		endpoint := urlfromipandport(host, fe.port)
-		be = NewBackend(endpoint, &fe)
+		endpoint := urlfromipandport(ip, fe.port)
+		be = *NewBackend(endpoint, &fe)
 		if err != nil {
 			return
 		}
-		fe.Backends[endpoint] = &be
+		fe.Backends[*endpoint] = &be
 	}
 
 	return
