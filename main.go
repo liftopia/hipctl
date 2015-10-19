@@ -41,6 +41,7 @@ func validateips(c *cli.Context) (err error) {
 
 // yeah i know
 func setupglobals(c *cli.Context) (err error) {
+	log.Debug(strings.Join(c.Args(), ", "))
 	conn, err = redisurl.ConnectToURL(c.GlobalString("redis"))
 	if err != nil {
 		return
@@ -62,6 +63,7 @@ func init() {
 
 func main() {
 	app := cli.NewApp()
+	app.EnableBashCompletion = true
 	app.Name = "hipctl"
 	app.Usage = "hipache bulk manager"
 	app.Flags = []cli.Flag{
@@ -76,7 +78,7 @@ func main() {
 	app.Commands = []cli.Command{
 		{
 			Name:  "list",
-			Usage: "list frontends and backends",
+			Usage: "list frontends, backends, and more",
 			Action: func(c *cli.Context) {
 				for _, fe := range frontends {
 					fmt.Printf("%v\n", &fe)
@@ -85,6 +87,17 @@ func main() {
 					}
 					fmt.Println(strings.Repeat("-", 120))
 				}
+			},
+			Subcommands: []cli.Command{
+				{
+					Name:  "servers",
+					Usage: "list configured servers",
+					Action: func(c *cli.Context) {
+						for _, server := range servers {
+							fmt.Printf("%+v\n", server)
+						}
+					},
+				},
 			},
 		},
 		{

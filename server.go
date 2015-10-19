@@ -13,6 +13,10 @@ type Server struct {
 
 var servers []*Server
 
+func (s *Server) String() string {
+	return s.IP.String()
+}
+
 // AddBackend appens a known backend to the server's list
 func (s *Server) AddBackend(b *Backend) {
 	s.Backends[*b.Endpoint] = b
