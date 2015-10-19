@@ -1,38 +1,72 @@
 package main
 
 import (
-	"fmt"
 	"net"
 	"net/url"
+	"strconv"
+	"strings"
 )
 
 // Backend stores the details about the frontend's connections
 type Backend struct {
-	IP       net.IP
 	Endpoint *url.URL
-	Frontend *frontend
+	Frontend *Frontend
+	Server   *Server
+}
+
+// Port grabs the port from the Endpoint's Host key
+func (b *Backend) Port() (port int) {
+	port = 80
+	if parts := strings.Split(b.Endpoint.Host, ":"); len(parts) > 1 {
+		port, _ = strconv.Atoi(parts[1])
+	}
+	return
+}
+
+// Host grabs the host from the Endpoint's Host key
+func (b *Backend) Host() (host string) {
+	return strings.Split(b.Endpoint.Host, ":")[0]
 }
 
 func (b *Backend) String() string {
-	return fmt.Sprintf(
-		"%-40s %s",
-		b.IP,
-		b.Endpoint,
-	)
+	return b.Endpoint.String()
+}
+
+// AddServer appends a known host to the backend's serving list
+func (b *Backend) AddServer(s *Server) {
+	b.Server = s
+	s.AddBackend(b)
+}
+
+// Equal compares one Backend to another to see if they match
+func (b *Backend) Equal(other *Backend) bool {
+	if b.Endpoint == other.Endpoint && b.Frontend == other.Frontend {
+		return true
+	}
+	return false
+}
+
+// Empty checks if the Backend is completely void of values
+func (b *Backend) Empty() bool {
+	if b.Endpoint == nil && b.Frontend == nil {
+		return true
+	}
+	return false
+}
+
+// IsIP checks the Backend for the presence of the IP
+func (b *Backend) IsIP(ip string) bool {
+	host := strings.Split(b.Endpoint.Host, ":")[0]
+	if host == net.ParseIP(ip).String() {
+		return true
+	}
+	return false
 }
 
 // NewBackend generates a backend for frontend usage
-func NewBackend(ip string, port string, fe *frontend) Backend {
+func NewBackend(endpoint url.URL, fe *Frontend) Backend {
 	return Backend{
-		Endpoint: &url.URL{
-			Scheme: "http",
-			Host:   fmt.Sprintf("%s:%s", ip, port),
-		},
+		Endpoint: &endpoint,
 		Frontend: fe,
-		IP:       net.ParseIP(ip),
 	}
-}
-
-func (b *Backend) leavefrontend() {
-	conn.Do("LREM", b.Frontend.name, 0, b.Endpoint)
 }

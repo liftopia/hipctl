@@ -9,13 +9,19 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/garyburd/redigo/redis"
+	"github.com/op/go-logging"
 	"github.com/soveran/redisurl"
 )
 
 var conn redis.Conn
-var frontends map[string]frontend
+var frontends map[string]Frontend
 
-func validateips(c *cli.Context) error {
+var log = logging.MustGetLogger("hipctl")
+var format = logging.MustStringFormatter(
+	"%{color}%{time:20060102 15:04:05.000} %{shortfunc:-20s} ▶ %{level:-6s} %{id:03x}%{color:reset} %{message}",
+)
+
+func validateips(c *cli.Context) (err error) {
 	if len(c.Args()) == 0 {
 		return errors.New("IP(s) required")
 	}
@@ -31,7 +37,7 @@ func validateips(c *cli.Context) error {
 		return fmt.Errorf("Bad IPs: %v", strings.Join(badips, ", "))
 	}
 
-	return nil
+	return
 }
 
 // yeah i know
@@ -46,7 +52,13 @@ func setupglobals(c *cli.Context) (err error) {
 		return errors.New("empty frontends list :(")
 	}
 
-	return nil
+	return
+}
+
+func init() {
+	logbackend := logging.NewLogBackend(os.Stderr, "", 0)
+	logbackendformatter := logging.NewBackendFormatter(logbackend, format)
+	logging.SetBackend(logbackendformatter)
 }
 
 func main() {
@@ -84,6 +96,7 @@ func main() {
 				for _, ip := range c.Args() {
 					for _, fe := range frontends {
 						if !fe.hasbackend(ip) {
+							log.Debug("adding %s to %v", ip, fe.key)
 							fe.addbackend(ip)
 						}
 					}
@@ -97,8 +110,8 @@ func main() {
 			Action: func(c *cli.Context) {
 				for _, ip := range c.Args() {
 					for _, fe := range frontends {
-						if fe.hasbackend(ip) {
-							fe.removebackend(ip)
+						if be := fe.getbackend(ip); be != nil {
+							fe.removebackend(be)
 						}
 					}
 				}
@@ -108,6 +121,6 @@ func main() {
 
 	err := app.Run(os.Args)
 	if err != nil {
-		fmt.Println(err)
+		log.Error("Error - %+v", err)
 	}
 }

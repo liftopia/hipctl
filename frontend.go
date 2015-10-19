@@ -3,127 +3,209 @@ package main
 import (
 	"errors"
 	"fmt"
-	"net"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/garyburd/redigo/redis"
 )
 
-type frontend struct {
-	name       string
-	id         string
-	hostheader string
-	port       string
-	Backends   map[string]*Backend
+// Frontend stores the details about the frontends
+type Frontend struct {
+	name     string
+	key      string
+	options  []string
+	port     int
+	Backends map[url.URL]*Backend
 }
 
-func (f *frontend) String() string {
+func (f *Frontend) String() string {
 	return fmt.Sprintf(
-		"%-40s %-39s %-39s",
-		f.name,
-		f.id,
-		f.hostheader,
+		"%-40s %-6d %+v",
+		f.key,
+		f.port,
+		f.options,
 	)
 }
 
-func (f *frontend) hasbackend(ip string) bool {
-	for _, be := range f.Backends {
-		if be.IP.String() == net.ParseIP(ip).String() {
-			return true
-		}
-	}
-	return false
-}
-
-func (f *frontend) getbackend(ip string) Backend {
-	for _, be := range f.Backends {
-		if be.IP.String() == net.ParseIP(ip).String() {
-			return *be
-		}
-	}
-	return Backend{}
-}
-
-func (f *frontend) addbackend(ip string) {
-	fe := *f
-	be := NewBackend(ip, fe.port, &fe)
-	conn.Do("RPUSH", f.name, be.Endpoint)
-	fe, _ = getfrontend(f.name)
-	*f = fe
-}
-
-func (f *frontend) removebackend(ip string) {
-	fe := *f
-	be := fe.getbackend(ip)
-	be.leavefrontend()
-	fe, _ = getfrontend(f.name)
-	*f = fe
-}
-
-func getfrontend(key string) (fe frontend, err error) {
-	values, err := redis.Values(conn.Do("LRANGE", key, 0, -1))
-	if err != nil || len(values) <= 1 {
-		// empty: no config at all, one: info with no hosts
-		return frontend{}, err
-	}
-
-	var hosts []string
-	if err := redis.ScanSlice(values, &hosts); err != nil {
-		return frontend{}, err
-	}
-
-	info := strings.Split(hosts[0], "|")
-	id := info[0]
-	var hostheader string
-	if len(info) > 1 {
-		hostheader = info[1]
-	}
-	hosts = hosts[1:]
-
-	port := hosts[0][len(hosts[0])-2:]
-	if port != "80" && port != "81" {
-		return frontend{}, errors.New("invalid port config")
-	}
-
-	fe = frontend{
-		name:       key,
-		id:         id,
-		hostheader: hostheader,
-		port:       port,
-		Backends:   make(map[string]*Backend),
-	}
-
-	for h := range hosts {
-		host := hosts[h][7 : len(hosts[h])-3]
-		be := NewBackend(host, fe.port, &fe)
-		fe.Backends[host] = &be
-	}
-
-	return fe, nil
-}
-
-func getfrontendkeys() (keys []string) {
-	values, _ := redis.Values(conn.Do("KEYS", "frontend:*"))
-	if len(values) == 0 {
-		return nil
-	}
-
-	if err := redis.ScanSlice(values, &keys); err != nil {
-		return nil
+func (f *Frontend) hasbackend(ip string) (hasit bool) {
+	be := f.getbackend(ip)
+	if be != nil {
+		hasit = !be.Empty()
 	}
 
 	return
 }
 
+func (f *Frontend) getbackend(ip string) (be *Backend) {
+	for k, be := range f.Backends {
+		if be.IsIP(ip) {
+			return f.Backends[k]
+		}
+	}
+	return
+}
+
+func (f *Frontend) appendBackend(b *Backend) {
+	f.Backends[*b.Endpoint] = b
+}
+
+func (f *Frontend) addbackend(ip string) (err error) {
+	be := NewBackend(urlfromipandport(ip, f.port), f)
+	be.Server = GetServer(ip)
+	log.Debug("Adding new backend %v to %s", be.Endpoint, f.key)
+	f.appendBackend(&be)
+	log.Debug("%s backends: %+v", f.key, f.Backends)
+	err = f.Save()
+
+	return
+}
+
+func (f *Frontend) removebackend(be *Backend) error {
+	delete(f.Backends, *be.Endpoint)
+	return f.Save()
+}
+
+// Save writes the current config from memory to hipache
+func (f *Frontend) Save() (err error) {
+	var create []interface{}
+
+	create = append(create, fmt.Sprintf("PREP:%s", f.key))
+	create = append(create, f.printoptions())
+	for _, be := range f.Backends {
+		create = append(create, be.Endpoint.String())
+	}
+
+	var replace []interface{}
+
+	replace = append(replace, fmt.Sprintf("PREP:%s", f.key))
+	replace = append(replace, f.key)
+
+	log.Debug("Saving %s", f.key)
+	log.Debug("%s %s", "RPUSH", create)
+	log.Debug("%s %s", "RENAME", replace)
+
+	conn.Send("MULTI")
+	conn.Send("RPUSH", create...)
+	conn.Send("RENAME", replace...)
+	r, err := conn.Do("EXEC")
+	log.Debug("Save response: %+v (%+v)", r, err)
+
+	return
+}
+
+func getport(endpoint string) (port int, err error) {
+	var uri *url.URL
+	if uri, err = url.Parse(endpoint); err != nil {
+		return -1, err
+	}
+
+	parts := strings.Split(uri.Host, ":")
+	if len(parts) == 1 {
+		// this is gonna have to be replaced by a smarter backend handling of ports
+		// containerization is going to destroy this 80 vs 81 business
+		return 80, errors.New("frontend is probably using external backend")
+	}
+
+	if port, err = strconv.Atoi(parts[1]); err != nil {
+		return
+	}
+
+	if port != 80 && port != 81 {
+		return port, errors.New("invalid port config")
+	}
+
+	return
+}
+
+func parseinfo(str string) []string {
+	return strings.Split(str, "|")
+}
+
+func (f *Frontend) printoptions() string {
+	return strings.Join(f.options, "|")
+}
+
+// NewFrontend creates a new frontend and adds it to hipache's configuration
+// this starts with an empty backend list
+func NewFrontend(key string, options []string, port int) Frontend {
+	return Frontend{
+		name:     strings.Split(key, ":")[1],
+		key:      key,
+		options:  options,
+		port:     port,
+		Backends: make(map[url.URL]*Backend),
+	}
+}
+
+func getfrontend(key string) (fe Frontend, err error) {
+	values, err := redis.Values(conn.Do("LRANGE", key, 0, -1))
+	if err != nil {
+		return
+	}
+	if len(values) <= 1 {
+		// empty: no config at all, one: info with no hosts
+		return fe, fmt.Errorf("No frontend config for %s", key)
+	}
+
+	var config []string
+	if err = redis.ScanSlice(values, &config); err != nil {
+		return
+	}
+	info, hosts := config[0], config[1:]
+	options := parseinfo(info)
+
+	var port int
+	if port, err = getport(hosts[0]); err != nil {
+		log.Debug("Port error for %s: %v", key, err)
+		return
+	}
+
+	fe = NewFrontend(key, options, port)
+
+	for h := range hosts {
+		host := hosts[h][7 : len(hosts[h])-3]
+		var be Backend
+		endpoint := urlfromipandport(host, fe.port)
+		be = NewBackend(endpoint, &fe)
+		if err != nil {
+			return
+		}
+		fe.Backends[endpoint] = &be
+	}
+
+	return
+}
+
+func getfrontendkeys() (keys []string, err error) {
+	values, err := redis.Values(conn.Do("KEYS", "frontend:*"))
+	if len(values) == 0 {
+		log.Error("Did not find any frontend keys (frontend:*)")
+		return
+	}
+	if err != nil {
+		log.Error("Redis had an error :( %+v", err)
+		return
+	}
+
+	redis.ScanSlice(values, &keys)
+	return
+}
+
 func updatefrontends() (err error) {
-	frontends = make(map[string]frontend)
-	for _, key := range getfrontendkeys() {
+	frontends = make(map[string]Frontend)
+	var keys []string
+	if keys, err = getfrontendkeys(); err != nil {
+		return
+	}
+	for _, key := range keys {
 		if strings.Contains(key, "fr-ca") || strings.Contains(key, "blog") {
 			continue
 		}
 
 		fe, err := getfrontend(key)
 		if err != nil {
+			log.Debug("Error loading frontend: %s (%s)", key, err)
 			continue
 		}
 		frontends[key] = fe
