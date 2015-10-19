@@ -48,7 +48,8 @@ func TestAddFrontend(t *testing.T) {
 
 func TestAddBackendByIP(t *testing.T) {
 	defer clear()
-	fe := NewFrontend("frontend:testing.com", "testing.com", "www.testing.com", 80)
+	var options = []string{"testing.com", "www.testing.com"}
+	fe := NewFrontend("frontend:testing.com", options, 80)
 	fe.addbackend("10.10.10.10")
 	if err := fe.Save(); err != nil {
 		t.Error(err)
@@ -57,7 +58,8 @@ func TestAddBackendByIP(t *testing.T) {
 
 func TestAddBadBackendByIP(t *testing.T) {
 	defer clear()
-	fe := NewFrontend("frontend:testing.com", "testing.com", "www.testing.com", 80)
+	var options = []string{"testing.com", "www.testing.com"}
+	fe := NewFrontend("frontend:testing.com", options, 80)
 	fe.addbackend("10.10.10.1000")
 	if err := fe.Save(); err != nil {
 		t.Error(err)

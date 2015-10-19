@@ -20,14 +20,13 @@ func (s *Server) AddBackend(b *Backend) {
 
 // GetServer grabs a specific server by IP
 func GetServer(ip string) (s *Server) {
+	s = &Server{IP: net.ParseIP(ip)}
 	if len(servers) > 0 {
 		for _, server := range servers {
 			if server.IP.String() == ip {
 				s = server
 			}
 		}
-	} else {
-		s = &Server{IP: net.ParseIP(ip)}
 	}
 	return
 }
