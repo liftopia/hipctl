@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"net/url"
 	"strconv"
@@ -32,6 +33,13 @@ func (b *Backend) String() string {
 	return b.Endpoint.String()
 }
 
+// Show the backend's detailed information
+func (b *Backend) Show() {
+	fmt.Printf("%20s: %s\n", "Endpoint", b.Endpoint)
+	fmt.Printf("%20s: %s\n", "Frontend", b.Frontend)
+	fmt.Printf("%20s: %s\n", "Server", b.Server)
+}
+
 // AddServer appends a known host to the backend's serving list
 func (b *Backend) AddServer(s *Server) {
 	b.Server = s
@@ -56,8 +64,7 @@ func (b *Backend) Empty() bool {
 
 // IsIP checks the Backend for the presence of the IP
 func (b *Backend) IsIP(ip string) bool {
-	host := strings.Split(b.Endpoint.Host, ":")[0]
-	if host == net.ParseIP(ip).String() {
+	if b.Host() == net.ParseIP(ip).String() {
 		return true
 	}
 	return false

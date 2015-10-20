@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/codegangsta/cli"
 	"github.com/garyburd/redigo/redis"
 )
 
@@ -33,6 +34,36 @@ func (f *Frontend) String() string {
 		f.port,
 		f.options,
 	)
+}
+
+// ListFrontendsComplete prints the server list for shell completions
+func ListFrontendsComplete(c *cli.Context) {
+	if len(c.Args()) > 0 {
+		return
+	}
+	for _, frontend := range frontends {
+		fmt.Println(frontend.name)
+	}
+}
+
+// ShowFrontend gives detailed information about a frontend
+func ShowFrontend(name string) {
+	for _, f := range frontends {
+		if f.name == name {
+			fmt.Printf("%20s: %s\n", "Name", f.name)
+			fmt.Printf("%20s: %s\n", "Key", f.key)
+			fmt.Printf("%20s: %s\n", "Options", f.options)
+			fmt.Printf("%20s: %d\n", "Port", f.port)
+			fmt.Printf("%20s: %p\n", "*Address", &f)
+
+			for endpoint, backend := range f.Backends {
+				fmt.Println()
+				fmt.Printf("  %p %20s: %+v\n", &endpoint, "[Endpoint]", endpoint)
+				backend.Show()
+			}
+			return
+		}
+	}
 }
 
 func (f *Frontend) hasbackend(ip string) (hasit bool) {

@@ -97,6 +97,40 @@ func main() {
 			},
 		},
 		{
+			Name:  "show",
+			Usage: "show a particular system",
+			Subcommands: []cli.Command{
+				{
+					Name:         "frontend",
+					Usage:        "show frontend information",
+					BashComplete: ListFrontendsComplete,
+					Before: func(c *cli.Context) error {
+						if len(c.Args()) != 1 {
+							return errors.New("Incorrect parameters.")
+						}
+						return nil
+					},
+					Action: func(c *cli.Context) {
+						ShowFrontend(c.Args().First())
+					},
+				},
+				{
+					Name:         "server",
+					Usage:        "show server information",
+					BashComplete: ListServersComplete,
+					Before: func(c *cli.Context) error {
+						if len(c.Args()) != 1 {
+							return errors.New("Incorrect parameters.")
+						}
+						return nil
+					},
+					Action: func(c *cli.Context) {
+						ShowServer(c.Args().First())
+					},
+				},
+			},
+		},
+		{
 			Name:   "add",
 			Usage:  "add backend by ip",
 			Before: validateips,

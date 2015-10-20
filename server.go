@@ -27,9 +27,20 @@ func ListServers(c *cli.Context) {
 	}
 }
 
+// ShowServer gives detailed information about a server
+func ShowServer(host string) {
+	s := GetServer(net.ParseIP(host))
+	if s == nil {
+		fmt.Printf("Couldn't find server %s\n", host)
+	} else {
+		fmt.Printf("%+v - %+v", s, s.Backends)
+	}
+}
+
 // AddBackend appends a known backend to the server's list
 func (s *Server) AddBackend(b *Backend) {
 	s.Backends[*b.Endpoint] = b
+	b.Server = s
 }
 
 // ListServersComplete prints the server list for shell completions
@@ -57,6 +68,17 @@ func NewServer(ip net.IP) (s *Server) {
 		s = &Server{IP: ip}
 		s.Backends = make(map[url.URL]*Backend)
 		servers = append(servers, s)
+	}
+
+	return
+}
+
+// GetServer grabs a specific server by IP without creating a new one
+func GetServer(ip net.IP) (s *Server) {
+	for _, server := range servers {
+		if server.IP.Equal(ip) {
+			s = server
+		}
 	}
 
 	return
