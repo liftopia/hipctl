@@ -169,4 +169,5 @@ func main() {
 	if err != nil {
 		log.Error("%+v", err)
 	}
+	log.Notice("%v %v %v %v", mem.Alloc, mem.TotalAlloc, mem.HeapAlloc, mem.HeapSys)
 }
