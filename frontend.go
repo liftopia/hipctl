@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
 	"github.com/garyburd/redigo/redis"
 )
@@ -98,9 +99,9 @@ func (f *Frontend) addbackend(arg string) (err error) {
 	ip := net.ParseIP(arg)
 	be := NewBackend(urlfromipandport(ip, f.port), f)
 	be.Server = NewServer(ip)
-	log.Debug("Adding new backend %v to %s", be.Endpoint, f.key)
+	log.Debugf("Adding new backend %v to %s", be.Endpoint, f.key)
 	f.appendBackend(be)
-	log.Debug("%s backends: %+v", f.key, f.Backends)
+	log.Debugf("%s backends: %+v", f.key, f.Backends)
 	err = f.Save()
 
 	return
@@ -126,15 +127,15 @@ func (f *Frontend) Save() (err error) {
 	replace = append(replace, fmt.Sprintf("PREP:%s", f.key))
 	replace = append(replace, f.key)
 
-	log.Debug("Saving %s", f.key)
-	log.Debug("%s %s", "RPUSH", create)
-	log.Debug("%s %s", "RENAME", replace)
+	log.Debugf("Saving %s", f.key)
+	log.Debugf("%s %s", "RPUSH", create)
+	log.Debugf("%s %s", "RENAME", replace)
 
 	conn.Send("MULTI")
 	conn.Send("RPUSH", create...)
 	conn.Send("RENAME", replace...)
 	r, err := conn.Do("EXEC")
-	log.Debug("Save response: %+v (%+v)", r, err)
+	log.Debugf("Save response: %+v (%+v)", r, err)
 
 	return
 }
@@ -202,7 +203,7 @@ func getfrontend(key string) (fe Frontend, err error) {
 
 	var port int
 	if port, err = getport(hosts[0]); err != nil {
-		log.Debug("Port error for %s: %v", key, err)
+		log.Debugf("Port error for %s: %v", key, err)
 		return
 	}
 
@@ -230,7 +231,7 @@ func getfrontendkeys() (keys []string, err error) {
 		return
 	}
 	if err != nil {
-		log.Error("Redis had an error :( %+v", err)
+		log.Errorf("Redis had an error :( %+v", err)
 		return
 	}
 
@@ -250,7 +251,10 @@ func updatefrontends() (err error) {
 
 		fe, err := getfrontend(key)
 		if err != nil {
-			log.Debug("Error loading frontend: %s (%s)", key, err)
+			log.WithFields(logrus.Fields{
+				"key": key,
+				"err": err,
+			}).Debugf("Error loading frontend: %s (%s)", key, err)
 			continue
 		}
 		frontends[key] = fe

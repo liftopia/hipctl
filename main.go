@@ -5,21 +5,20 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"runtime"
 	"strings"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
 	"github.com/garyburd/redigo/redis"
-	"github.com/op/go-logging"
 	"github.com/soveran/redisurl"
 )
 
 var conn redis.Conn
 
-var log = logging.MustGetLogger("hipctl")
-var format = logging.MustStringFormatter(
-	"%{color}%{time:20060102 15:04:05.000} %{shortfunc:-20s} ▶ %{level:-6s} %{id:03x}%{color:reset} %{message}",
-)
+var log = logrus.New()
+var formatter = &logrus.TextFormatter{
+	FullTimestamp: true,
+}
 
 func validateips(c *cli.Context) (err error) {
 	if len(c.Args()) == 0 {
@@ -42,6 +41,9 @@ func validateips(c *cli.Context) (err error) {
 
 // yeah i know
 func setupglobals(c *cli.Context) (err error) {
+	if !c.GlobalBool("debug") {
+		log.Level = logrus.ErrorLevel
+	}
 	conn, err = redisurl.ConnectToURL(c.GlobalString("redis"))
 	if err != nil {
 		return
@@ -55,10 +57,14 @@ func setupglobals(c *cli.Context) (err error) {
 	return
 }
 
+func setuplogs() {
+	log.Formatter = formatter
+	log.Out = os.Stderr
+	log.Level = logrus.DebugLevel
+}
+
 func init() {
-	logbackend := logging.NewLogBackend(os.Stderr, "", 0)
-	logbackendformatter := logging.NewBackendFormatter(logbackend, format)
-	logging.SetBackend(logbackendformatter)
+	setuplogs()
 }
 
 func main() {
@@ -71,6 +77,10 @@ func main() {
 			Name:   "redis",
 			Value:  "redis://127.0.0.1/6379",
 			EnvVar: "REDIS_URL",
+		},
+		cli.BoolFlag{
+			Name:   "debug",
+			EnvVar: "CONTROL_DEBUG",
 		},
 	}
 
@@ -139,7 +149,6 @@ func main() {
 				for _, ip := range c.Args() {
 					for _, fe := range frontends {
 						if !fe.hasbackend(ip) {
-							log.Debug("adding %s to %v", ip, fe.key)
 							fe.addbackend(ip)
 						}
 					}
@@ -162,12 +171,8 @@ func main() {
 		},
 	}
 
-	var mem runtime.MemStats
-	runtime.ReadMemStats(&mem)
-	log.Notice("%v %v %v %v", mem.Alloc, mem.TotalAlloc, mem.HeapAlloc, mem.HeapSys)
 	err := app.Run(os.Args)
 	if err != nil {
-		log.Error("%+v", err)
+		log.Errorf("%+v", err)
 	}
-	log.Notice("%v %v %v %v", mem.Alloc, mem.TotalAlloc, mem.HeapAlloc, mem.HeapSys)
 }
