@@ -13,6 +13,7 @@ type Backend struct {
 	Endpoint *url.URL
 	Frontend *Frontend
 	Server   *Server
+	self     *Backend
 }
 
 // Port grabs the port from the Endpoint's Host key
@@ -35,9 +36,10 @@ func (b *Backend) String() string {
 
 // Show the backend's detailed information
 func (b *Backend) Show() {
-	fmt.Printf("%20s: %s\n", "Endpoint", b.Endpoint)
-	fmt.Printf("%20s: %s\n", "Frontend", b.Frontend)
-	fmt.Printf("%20s: %s\n", "Server", b.Server)
+	fmt.Printf(showformat, &b.Endpoint, "Endpoint", b.Endpoint)
+	fmt.Printf(showformat, &b.Frontend, "Frontend", b.Frontend)
+	fmt.Printf(showformat, &b.Server, "Server", b.Server)
+	fmt.Printf(showformat, &b, "<self>", b)
 }
 
 // AddServer appends a known host to the backend's serving list
@@ -77,6 +79,7 @@ func NewBackend(endpoint *url.URL, fe *Frontend) (be *Backend) {
 		Endpoint: endpoint,
 		Frontend: fe,
 	}
+	be.self = be
 	server.AddBackend(be)
 	return
 }

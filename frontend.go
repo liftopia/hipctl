@@ -18,7 +18,7 @@ type Frontend struct {
 	key      string
 	options  []string
 	port     int
-	Backends map[url.URL]*Backend
+	Backends map[*url.URL]*Backend
 }
 
 var frontends map[string]Frontend
@@ -50,20 +50,26 @@ func ListFrontendsComplete(c *cli.Context) {
 func ShowFrontend(name string) {
 	for _, f := range frontends {
 		if f.name == name {
-			fmt.Printf("%20s: %s\n", "Name", f.name)
-			fmt.Printf("%20s: %s\n", "Key", f.key)
-			fmt.Printf("%20s: %s\n", "Options", f.options)
-			fmt.Printf("%20s: %d\n", "Port", f.port)
-			fmt.Printf("%20s: %p\n", "*Address", &f)
+			fmt.Printf(showformat, &f.name, "Name", f.name)
+			fmt.Printf(showformat, &f.key, "Key", f.key)
+			fmt.Printf(showformat, &f.options, "Options", f.options)
+			fmt.Printf(showformat, &f.port, "Port", f.port)
+			fmt.Printf(showformat, &f, "<self>", &f)
+			fmt.Printf(showformat, &f.Backends, "Backends", nil)
 
-			for endpoint, backend := range f.Backends {
+			var backend *Backend
+			for endpoint := range f.Backends {
+				backend = f.Backends[endpoint]
 				fmt.Println()
-				fmt.Printf("  %p %20s: %+v\n", &endpoint, "[Endpoint]", endpoint)
+				fmt.Printf(showformat, &endpoint, "[Endpoint]", endpoint)
+				fmt.Printf(showformat, &backend, "[Backend]", backend)
 				backend.Show()
 			}
 			return
 		}
 	}
+
+	log.Error("Can't find that frontend!")
 }
 
 func (f *Frontend) hasbackend(ip string) (hasit bool) {
@@ -85,7 +91,7 @@ func (f *Frontend) getbackend(ip string) (be *Backend) {
 }
 
 func (f *Frontend) appendBackend(b *Backend) {
-	f.Backends[*b.Endpoint] = b
+	f.Backends[b.Endpoint] = b
 }
 
 func (f *Frontend) addbackend(arg string) (err error) {
@@ -101,7 +107,7 @@ func (f *Frontend) addbackend(arg string) (err error) {
 }
 
 func (f *Frontend) removebackend(be *Backend) error {
-	delete(f.Backends, *be.Endpoint)
+	delete(f.Backends, be.Endpoint)
 	return f.Save()
 }
 
@@ -173,7 +179,7 @@ func NewFrontend(key string, options []string, port int) Frontend {
 		key:      key,
 		options:  options,
 		port:     port,
-		Backends: make(map[url.URL]*Backend),
+		Backends: make(map[*url.URL]*Backend),
 	}
 }
 
@@ -211,7 +217,7 @@ func getfrontend(key string) (fe Frontend, err error) {
 		if err != nil {
 			return
 		}
-		fe.Backends[*endpoint] = &be
+		fe.Backends[endpoint] = &be
 	}
 
 	return

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/codegangsta/cli"
@@ -161,6 +162,9 @@ func main() {
 		},
 	}
 
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	log.Notice("%v %v %v %v", mem.Alloc, mem.TotalAlloc, mem.HeapAlloc, mem.HeapSys)
 	err := app.Run(os.Args)
 	if err != nil {
 		log.Error("%+v", err)

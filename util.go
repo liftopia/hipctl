@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+var showformat = "  %p %20s: %#v\n"
+
 func urlfromipandport(ip net.IP, port int) *url.URL {
 	return &url.URL{
 		Scheme: "http",
