@@ -22,17 +22,14 @@ type Frontend struct {
 	Backends map[*url.URL]*Backend
 }
 
-var frontends map[string]Frontend
-
-func init() {
-	frontends = make(map[string]Frontend)
-}
+var frontends []*Frontend
 
 func (f *Frontend) String() string {
 	return fmt.Sprintf(
-		"%-40s %-6d %+v",
-		f.key,
+		"%-40s %-6d %d backends %+v",
+		f.name,
 		f.port,
+		len(f.Backends),
 		f.options,
 	)
 }
@@ -45,6 +42,14 @@ func ListFrontendsComplete(c *cli.Context) {
 	for _, frontend := range frontends {
 		fmt.Println(frontend.name)
 	}
+}
+
+// ListFrontends outputs a concise list for viewing pleasure
+func ListFrontends() {
+	for _, fe := range frontends {
+		fmt.Printf("%v\n", fe)
+	}
+	fmt.Printf("%d frontends\n", len(frontends))
 }
 
 // ShowFrontend gives detailed information about a frontend
@@ -88,6 +93,7 @@ func (f *Frontend) getbackend(ip string) (be *Backend) {
 			return f.Backends[k]
 		}
 	}
+
 	return
 }
 
@@ -95,16 +101,14 @@ func (f *Frontend) appendBackend(b *Backend) {
 	f.Backends[b.Endpoint] = b
 }
 
-func (f *Frontend) addbackend(arg string) (err error) {
+func (f *Frontend) addbackend(arg string) error {
 	ip := net.ParseIP(arg)
 	be := NewBackend(urlfromipandport(ip, f.port), f)
-	be.Server = NewServer(ip)
 	log.Debugf("Adding new backend %v to %s", be.Endpoint, f.key)
 	f.appendBackend(be)
 	log.Debugf("%s backends: %+v", f.key, f.Backends)
-	err = f.Save()
 
-	return
+	return f.Save()
 }
 
 func (f *Frontend) removebackend(be *Backend) error {
@@ -257,7 +261,7 @@ func updatefrontends() (err error) {
 			}).Debugf("Error loading frontend: %s (%s)", key, err)
 			continue
 		}
-		frontends[key] = fe
+		frontends = append(frontends, &fe)
 	}
 
 	return nil

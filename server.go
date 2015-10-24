@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"net"
-	"net/url"
 
 	"github.com/codegangsta/cli"
 )
@@ -11,36 +10,34 @@ import (
 // Server stores the underlying server routing information
 type Server struct {
 	IP       net.IP
-	Backends map[url.URL]*Backend
+	Backends backendpool
 }
 
 var servers []*Server
 
 func (s *Server) String() string {
-	return s.IP.String()
+	return fmt.Sprintf("%s, %d backends", s.IP, len(s.Backends))
 }
 
-// ListServers prints out the list of servers
-func ListServers(c *cli.Context) {
+func listServers() {
 	for _, server := range servers {
-		fmt.Printf("%+v\n", server)
+		fmt.Println(server)
 	}
+	fmt.Printf("%d servers\n", len(servers))
 }
 
 // ShowServer gives detailed information about a server
 func ShowServer(host string) {
-	s := GetServer(net.ParseIP(host))
-	if s == nil {
+	if s := GetServer(net.ParseIP(host)); s == nil {
 		fmt.Printf("Couldn't find server %s\n", host)
 	} else {
-		fmt.Printf("%+v - %+v", s, s.Backends)
+		fmt.Printf("%s\n%s\n", s, s.Backends.list())
 	}
 }
 
 // AddBackend appends a known backend to the server's list
 func (s *Server) AddBackend(b *Backend) {
-	s.Backends[*b.Endpoint] = b
-	b.Server = s
+	s.Backends = append(s.Backends, b)
 }
 
 // ListServersComplete prints the server list for shell completions
@@ -55,26 +52,28 @@ func ListServersComplete(c *cli.Context) {
 
 // NewServer grabs a specific server by IP
 func NewServer(ip net.IP) (s *Server) {
-	found := false
-
-	for _, server := range servers {
-		if server.IP.Equal(ip) {
-			s = server
-			found = true
-		}
+	if s = GetServer(ip); s != nil {
+		log.Debugf("Found with GetServer: %v", s)
+		return
 	}
 
-	if !found {
-		s = &Server{IP: ip}
-		s.Backends = make(map[url.URL]*Backend)
-		servers = append(servers, s)
-	}
+	log.Debugf("Passing off to CreateServer: %s", ip)
+	return CreateServer(ip)
+}
+
+// CreateServer handles the actual generation of a new server from IP
+func CreateServer(ip net.IP) (s *Server) {
+	log.Debugf("Creating new server at %s", ip)
+	s = &Server{IP: ip}
+	servers = append(servers, s)
+	log.Debugf("Server added! %v, (%d) %#v", s, len(servers), servers)
 
 	return
 }
 
 // GetServer grabs a specific server by IP without creating a new one
 func GetServer(ip net.IP) (s *Server) {
+	log.Debugf("Getting server at %s", ip)
 	for _, server := range servers {
 		if server.IP.Equal(ip) {
 			s = server

@@ -42,7 +42,7 @@ func validateips(c *cli.Context) (err error) {
 // yeah i know
 func setupglobals(c *cli.Context) (err error) {
 	if !c.GlobalBool("debug") {
-		log.Level = logrus.ErrorLevel
+		log.Level = logrus.InfoLevel
 	}
 	conn, err = redisurl.ConnectToURL(c.GlobalString("redis"))
 	if err != nil {
@@ -90,20 +90,20 @@ func main() {
 			Name:  "list",
 			Usage: "list frontends, backends, and more",
 			Action: func(c *cli.Context) {
-				for _, fe := range frontends {
-					fmt.Printf("%v\n", &fe)
-					for _, be := range fe.Backends {
-						fmt.Printf("%v\n", be)
-					}
-					fmt.Println(strings.Repeat("-", 120))
-				}
+				ListFrontends()
+				fmt.Println()
+				listServers()
+				fmt.Println()
+				ListBackends()
 			},
 			Subcommands: []cli.Command{
 				{
 					Name:         "servers",
 					Usage:        "list configured servers",
 					BashComplete: ListServersComplete,
-					Action:       ListServers,
+					Action: func(c *cli.Context) {
+						listServers()
+					},
 				},
 			},
 		},
